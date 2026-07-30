@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -17,9 +16,6 @@ from app.providers.bilibili import (
     BilibiliProviderError,
 )
 from app.providers.spotify import SpotifyProvider, SpotifyProviderError
-
-SourceName = Literal["spotify", "bilibili"]
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -83,34 +79,6 @@ async def sources() -> list[SourceInfo]:
     ]
 
 
-@app.get("/api/search", response_model=list[UnifiedTrack])
-async def unified_search(
-    request: Request,
-    source: SourceName = Query(...),
-    q: str = Query(..., min_length=1, max_length=120),
-    limit: int = Query(10, ge=1, le=50),
-    page: int = Query(1, ge=1, le=100),
-) -> list[UnifiedTrack]:
-    try:
-        if source == "spotify":
-            return await request.app.state.spotify.search(q, limit=limit)
-        return await _search_bilibili(request, q, limit=limit, page=page)
-    except (SpotifyProviderError, BilibiliProviderError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@app.get("/api/resolve", response_model=ResolvedAudio)
-async def unified_resolve(
-    request: Request,
-    source: Literal["bilibili"] = Query(...),
-    id: str = Query(..., min_length=1, max_length=160),
-) -> ResolvedAudio:
-    try:
-        return await _resolve_bilibili_audio(request, id)
-    except BilibiliProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
 @app.get("/api/spotify/search", response_model=list[UnifiedTrack])
 async def spotify_search(
     request: Request,
@@ -157,12 +125,6 @@ async def bilibili_search(
 
 
 @app.get(
-    "/api/bilibili/resolve",
-    response_model=ResolvedAudio,
-    deprecated=True,
-    include_in_schema=False,
-)
-@app.get(
     "/api/bilibili/audio/resolve",
     response_model=ResolvedAudio,
     name="bilibili_audio_resolve",
@@ -174,11 +136,6 @@ async def bilibili_resolve(
     return await _resolve_bilibili_audio(request, id)
 
 
-@app.get(
-    "/api/bilibili/stream",
-    deprecated=True,
-    include_in_schema=False,
-)
 @app.get("/api/bilibili/audio/stream", name="bilibili_audio_stream")
 async def bilibili_audio_stream(
     request: Request,
@@ -200,11 +157,6 @@ async def bilibili_audio_stream(
     )
 
 
-@app.get(
-    "/api/bilibili/direct",
-    deprecated=True,
-    include_in_schema=False,
-)
 @app.get("/api/bilibili/audio/direct", name="bilibili_audio_direct")
 async def bilibili_audio_direct(
     request: Request,

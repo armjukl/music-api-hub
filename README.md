@@ -5,10 +5,10 @@
 ## 当前能力
 
 - `GET /api/sources`：列出可用来源和能力。
-- `GET /api/search?source=bilibili&q=歌曲名&page=2`：搜索 Bilibili 音频候选并跳到第 2 页。
-- `GET /api/resolve?source=bilibili&id=BV...:cid`：解析 Bilibili 音频，并返回实时播放地址和缓存直链。
-- `GET /api/bilibili/stream?id=BV...:cid`：实时使用 FFmpeg 将 Bilibili 音频转换为 MP3，不写入缓存。
-- `GET /api/bilibili/direct?id=BV...:cid`：先转换并按 ID 缓存 MP3，转换完成后返回本地文件。
+- `GET /api/bilibili/search?q=歌曲名&page=2`：搜索 Bilibili 视频页并展开为可播放候选。
+- `GET /api/bilibili/audio/resolve?id=BV...:cid`：解析 Bilibili 音频，并返回实时播放地址和缓存直链。
+- `GET /api/bilibili/audio/stream?id=BV...:cid`：实时使用 FFmpeg 将 Bilibili 音频转换为 MP3，不写入缓存。
+- `GET /api/bilibili/audio/direct?id=BV...:cid`：先转换并按 ID 缓存 MP3，转换完成后返回本地文件。
 - `GET /api/bilibili/video/resolve?id=BV...:cid`：解析 Bilibili 完整视频，并返回实时播放地址和缓存直链。
 - `GET /api/bilibili/video/stream?id=BV...:cid`：实时合并并返回完整视频，不写入缓存。
 - `GET /api/bilibili/video/direct?id=BV...:cid`：先合并并按 ID 缓存完整视频，合并完成后返回本地文件。
@@ -31,9 +31,9 @@
 | 实时视频 MP4 | `GET /api/bilibili/video/stream?id=BV号:cid` |
 | 缓存视频 MP4 | `GET /api/bilibili/video/direct?id=BV号:cid` |
 
-搜索结果与音频解析响应中的 `stream_url`、`download_url` 会返回规范的 `audio` 路径。旧的 `/api/bilibili/resolve`、`/api/bilibili/stream`、`/api/bilibili/direct` 仍保留为兼容别名，但新模块不要继续依赖它们。
+搜索结果与音频解析响应中的 `stream_url`、`download_url` 会返回规范的 `audio` 路径。服务不再提供 `/api/search`、`/api/resolve` 或旧的 `/api/bilibili/resolve`、`/api/bilibili/stream`、`/api/bilibili/direct`。
 
-`/api/search?source=bilibili` 与 `/api/resolve?source=bilibili` 为历史统一入口，兼容现有调用；新增来源模块应优先提供自己的 `/api/{source}/search` 和媒体类型入口。
+新增来源模块应提供自己的 `/api/{source}/search`，并按媒体类型提供 `/api/{source}/{media_type}/{action}` 入口。
 
 ## 运行
 
@@ -61,7 +61,7 @@ export SPOTIFY_CLIENT_SECRET=your-client-secret
 
 | 类型 | 实时转换 | 缓存直链 |
 | --- | --- | --- |
-| 音频 MP3 | `/api/bilibili/stream` | `/api/bilibili/direct` |
+| 音频 MP3 | `/api/bilibili/audio/stream` | `/api/bilibili/audio/direct` |
 | 完整视频 MP4 | `/api/bilibili/video/stream` | `/api/bilibili/video/direct` |
 
 `stream` 会在请求期间解析上游地址并启动 FFmpeg，适合立即播放；请求断开后不会留下完整缓存文件。`direct` 会等待转换或合并完成，再返回本地文件，并支持浏览器的 HTTP Range 拖动播放；相同 `id` 再次请求时直接命中 `BILIBILI_CACHE_DIR`。
@@ -81,8 +81,8 @@ export SPOTIFY_CLIENT_SECRET=your-client-secret
   "duration_ms": 240000,
   "cover_url": null,
   "source_url": "https://www.bilibili.com/video/BVxxxx",
-  "stream_url": "/api/bilibili/stream?id=BVxxxx%3A123",
-  "download_url": "/api/bilibili/direct?id=BVxxxx%3A123"
+  "stream_url": "/api/bilibili/audio/stream?id=BVxxxx%3A123",
+  "download_url": "/api/bilibili/audio/direct?id=BVxxxx%3A123"
 }
 ```
 
@@ -101,9 +101,9 @@ export SPOTIFY_CLIENT_SECRET=your-client-secret
 - 缓存目录默认是 `downloads/bilibili`，可通过 `BILIBILI_CACHE_DIR` 修改。
 - MP3 缓存码率默认是 `320 kbps`，可通过 `BILIBILI_MP3_BITRATE` 配置，范围为 `32` 到 `320`。
 - 同一个 `id` 的音频和视频使用不同缓存文件；音频缓存码率变化后会生成新的音频缓存。
-- `/api/resolve` 返回的上游媒体地址可能过期，客户端应优先使用响应中的 `stream_url` 或 `download_url`。
+- 音频与视频解析响应中的上游媒体地址可能过期，客户端应优先使用响应中的 `stream_url` 或 `download_url`。
 
-`/api/bilibili/mp3` 已取消，请使用 `/api/bilibili/direct`。`/api/bilibili/video/stream` 现在表示实时合流；需要缓存视频时请使用 `/api/bilibili/video/direct`。
+`/api/bilibili/video/stream` 表示实时合流；需要缓存视频时请使用 `/api/bilibili/video/direct`。
 
 请遵守 Bilibili 的服务条款与版权规定。
 

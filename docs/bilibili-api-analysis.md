@@ -36,9 +36,9 @@ Bilibili Web API
 | 接口 | 作用 | 是否缓存 |
 | --- | --- | --- |
 | `GET /api/bilibili/search?q=...` | 搜索并展开为可播放的页面候选 | 不缓存搜索结果 |
-| `GET /api/bilibili/resolve?id=BV...:cid` | 解析音频信息并返回 `stream_url`、`download_url` | 只解析，不生成文件 |
-| `GET /api/bilibili/stream?id=BV...:cid` | 实时将音频转为 MP3 | 不写入完整文件 |
-| `GET /api/bilibili/direct?id=BV...:cid` | 转换音频后返回本地 MP3 | 按 ID 缓存 |
+| `GET /api/bilibili/audio/resolve?id=BV...:cid` | 解析音频信息并返回 `stream_url`、`download_url` | 只解析，不生成文件 |
+| `GET /api/bilibili/audio/stream?id=BV...:cid` | 实时将音频转为 MP3 | 不写入完整文件 |
+| `GET /api/bilibili/audio/direct?id=BV...:cid` | 转换音频后返回本地 MP3 | 按 ID 缓存 |
 | `GET /api/bilibili/video/resolve?id=BV...:cid` | 解析完整视频信息 | 只解析，不生成文件 |
 | `GET /api/bilibili/video/stream?id=BV...:cid` | 实时合并或代理完整视频 | 不写入完整文件 |
 | `GET /api/bilibili/video/direct?id=BV...:cid` | 合并完整视频后返回本地 MP4 | 按 ID 缓存 |
@@ -47,8 +47,8 @@ Bilibili Web API
 
 ```json
 {
-  "stream_url": "/api/bilibili/stream?id=BVxxxx%3A123",
-  "download_url": "/api/bilibili/direct?id=BVxxxx%3A123"
+  "stream_url": "/api/bilibili/audio/stream?id=BVxxxx%3A123",
+  "download_url": "/api/bilibili/audio/direct?id=BVxxxx%3A123"
 }
 ```
 

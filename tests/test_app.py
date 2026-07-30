@@ -71,10 +71,6 @@ def test_bilibili_media_routes_separate_stream_and_direct(tmp_path, monkeypatch)
     assert audio_direct.status_code == 200
     assert audio_direct.content == b"cached mp3"
     assert audio_direct.headers["content-type"] == "audio/mpeg"
-    legacy_audio_stream = client.get("/api/bilibili/stream?id=BV1fixture%3A123")
-    legacy_audio_direct = client.get("/api/bilibili/direct?id=BV1fixture%3A123")
-    assert legacy_audio_stream.status_code == 200
-    assert legacy_audio_direct.status_code == 200
     audio_range = client.get(
         "/api/bilibili/audio/direct?id=BV1fixture%3A123",
         headers={"Range": "bytes=1-6"},
@@ -90,7 +86,7 @@ def test_bilibili_media_routes_separate_stream_and_direct(tmp_path, monkeypatch)
         headers={"Range": "bytes=1-6"},
     )
     invalid_range = client.get(
-        "/api/bilibili/direct?id=BV1fixture%3A123",
+        "/api/bilibili/audio/direct?id=BV1fixture%3A123",
         headers={"Range": "bytes=999-"},
     )
 
@@ -139,6 +135,9 @@ def test_bilibili_search_and_audio_resolve_return_canonical_audio_routes(monkeyp
         legacy_resolve_response = client.get(
             "/api/bilibili/resolve?id=BV1fixture%3A123"
         )
+        legacy_search_response = client.get(
+            "/api/search?source=bilibili&q=fixture"
+        )
 
     expected_stream = "/api/bilibili/audio/stream?id=BV1fixture%3A123"
     expected_direct = "/api/bilibili/audio/direct?id=BV1fixture%3A123"
@@ -148,5 +147,5 @@ def test_bilibili_search_and_audio_resolve_return_canonical_audio_routes(monkeyp
     assert resolve_response.status_code == 200
     assert resolve_response.json()["stream_url"] == expected_stream
     assert resolve_response.json()["download_url"] == expected_direct
-    assert legacy_resolve_response.status_code == 200
-    assert legacy_resolve_response.json()["download_url"] == expected_direct
+    assert legacy_resolve_response.status_code == 404
+    assert legacy_search_response.status_code == 404
