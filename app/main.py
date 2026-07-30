@@ -72,11 +72,12 @@ async def sources() -> list[SourceInfo]:
             label="Bilibili",
             capabilities=[
                 "search",
-                "resolve-audio",
-                "stream-audio",
-                "direct-audio",
-                "stream-video",
-                "direct-video",
+                "audio.resolve",
+                "audio.stream",
+                "audio.direct",
+                "video.resolve",
+                "video.stream",
+                "video.direct",
             ],
         ),
     ]
@@ -93,7 +94,7 @@ async def unified_search(
     try:
         if source == "spotify":
             return await request.app.state.spotify.search(q, limit=limit)
-        return await request.app.state.bilibili.search(q, limit=limit, page=page)
+        return await _search_bilibili(request, q, limit=limit, page=page)
     except (SpotifyProviderError, BilibiliProviderError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -105,8 +106,7 @@ async def unified_resolve(
     id: str = Query(..., min_length=1, max_length=160),
 ) -> ResolvedAudio:
     try:
-        audio = await request.app.state.bilibili.resolve(id)
-        return _with_bilibili_stream_url(audio, id)
+        return await _resolve_bilibili_audio(request, id)
     except BilibiliProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -153,25 +153,33 @@ async def bilibili_search(
     limit: int = Query(10, ge=1, le=50),
     page: int = Query(1, ge=1, le=100),
 ) -> list[UnifiedTrack]:
-    try:
-        return await request.app.state.bilibili.search(q, limit=limit, page=page)
-    except BilibiliProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return await _search_bilibili(request, q, limit=limit, page=page)
 
 
-@app.get("/api/bilibili/resolve", response_model=ResolvedAudio)
+@app.get(
+    "/api/bilibili/resolve",
+    response_model=ResolvedAudio,
+    deprecated=True,
+    include_in_schema=False,
+)
+@app.get(
+    "/api/bilibili/audio/resolve",
+    response_model=ResolvedAudio,
+    name="bilibili_audio_resolve",
+)
 async def bilibili_resolve(
     request: Request,
     id: str = Query(..., min_length=1, max_length=160),
 ) -> ResolvedAudio:
-    try:
-        audio = await request.app.state.bilibili.resolve(id)
-        return _with_bilibili_stream_url(audio, id)
-    except BilibiliProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return await _resolve_bilibili_audio(request, id)
 
 
-@app.get("/api/bilibili/stream", name="bilibili_audio_stream")
+@app.get(
+    "/api/bilibili/stream",
+    deprecated=True,
+    include_in_schema=False,
+)
+@app.get("/api/bilibili/audio/stream", name="bilibili_audio_stream")
 async def bilibili_audio_stream(
     request: Request,
     id: str = Query(..., min_length=1, max_length=160),
@@ -192,7 +200,12 @@ async def bilibili_audio_stream(
     )
 
 
-@app.get("/api/bilibili/direct", name="bilibili_audio_direct")
+@app.get(
+    "/api/bilibili/direct",
+    deprecated=True,
+    include_in_schema=False,
+)
+@app.get("/api/bilibili/audio/direct", name="bilibili_audio_direct")
 async def bilibili_audio_direct(
     request: Request,
     id: str = Query(..., min_length=1, max_length=160),
@@ -275,6 +288,35 @@ async def bilibili_video_direct(
     return _cached_media_response(request, path, "video/mp4")
 
 
+async def _search_bilibili(
+    request: Request,
+    query: str,
+    *,
+    limit: int,
+    page: int,
+) -> list[UnifiedTrack]:
+    try:
+        tracks = await request.app.state.bilibili.search(
+            query,
+            limit=limit,
+            page=page,
+        )
+        return [_with_bilibili_audio_track_urls(track) for track in tracks]
+    except BilibiliProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+async def _resolve_bilibili_audio(
+    request: Request,
+    track_id: str,
+) -> ResolvedAudio:
+    try:
+        audio = await request.app.state.bilibili.resolve(track_id)
+        return _with_bilibili_audio_urls(audio, track_id)
+    except BilibiliProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 def _cached_media_response(request: Request, path: Path, media_type: str) -> Response:
     size = path.stat().st_size
     byte_range = _parse_byte_range(request.headers.get("range"), size)
@@ -353,12 +395,22 @@ def _parse_byte_range(
         return None
 
 
-def _with_bilibili_stream_url(audio: ResolvedAudio, track_id: str) -> ResolvedAudio:
+def _bilibili_audio_url_fields(track_id: str) -> dict[str, str]:
     encoded_id = quote(track_id, safe="")
+    return {
+        "stream_url": f"/api/bilibili/audio/stream?id={encoded_id}",
+        "download_url": f"/api/bilibili/audio/direct?id={encoded_id}",
+    }
+
+
+def _with_bilibili_audio_track_urls(track: UnifiedTrack) -> UnifiedTrack:
+    return track.model_copy(update=_bilibili_audio_url_fields(track.id))
+
+
+def _with_bilibili_audio_urls(audio: ResolvedAudio, track_id: str) -> ResolvedAudio:
     return audio.model_copy(
         update={
-            "stream_url": f"/api/bilibili/stream?id={encoded_id}",
-            "download_url": f"/api/bilibili/direct?id={encoded_id}",
+            **_bilibili_audio_url_fields(track_id),
         }
     )
 

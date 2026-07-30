@@ -8,7 +8,6 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import aiohttp
 
@@ -504,7 +503,6 @@ def _expand_video(video: Any) -> list[UnifiedTrack]:
         display_title = page_title if len(pages) > 1 and page_title else title
         page_index = int(getattr(page, "index", 1) or 1)
         track_id = f"{bvid}:{cid}"
-        encoded_id = quote(track_id, safe="")
         tracks.append(
             UnifiedTrack(
                 source="bilibili",
@@ -514,8 +512,6 @@ def _expand_video(video: Any) -> list[UnifiedTrack]:
                 duration_ms=int(getattr(page, "duration_ms", 0) or 0) or None,
                 source_url=f"https://www.bilibili.com/video/{bvid}/?p={page_index}",
                 playable=True,
-                stream_url=f"/api/bilibili/stream?id={encoded_id}",
-                download_url=f"/api/bilibili/direct?id={encoded_id}",
             )
         )
     return tracks

@@ -17,6 +17,24 @@
 - `POST /api/spotify/download?url=Spotify歌曲链接`：使用内置 spotDL 模块下载并返回文件路径。
 - `GET /health`：服务健康检查。
 
+## 模块化接口入口
+
+新功能应使用以下规范入口，路径按“来源 / 媒体类型 / 动作”组织：
+
+| 功能 | 规范入口 |
+| --- | --- |
+| 搜索 Bilibili 视频页 | `GET /api/bilibili/search?q=关键词&page=1` |
+| 解析音频 | `GET /api/bilibili/audio/resolve?id=BV号:cid` |
+| 实时音频 MP3 | `GET /api/bilibili/audio/stream?id=BV号:cid` |
+| 缓存音频 MP3 | `GET /api/bilibili/audio/direct?id=BV号:cid` |
+| 解析视频 | `GET /api/bilibili/video/resolve?id=BV号:cid` |
+| 实时视频 MP4 | `GET /api/bilibili/video/stream?id=BV号:cid` |
+| 缓存视频 MP4 | `GET /api/bilibili/video/direct?id=BV号:cid` |
+
+搜索结果与音频解析响应中的 `stream_url`、`download_url` 会返回规范的 `audio` 路径。旧的 `/api/bilibili/resolve`、`/api/bilibili/stream`、`/api/bilibili/direct` 仍保留为兼容别名，但新模块不要继续依赖它们。
+
+`/api/search?source=bilibili` 与 `/api/resolve?source=bilibili` 为历史统一入口，兼容现有调用；新增来源模块应优先提供自己的 `/api/{source}/search` 和媒体类型入口。
+
 ## 运行
 
 ```bash

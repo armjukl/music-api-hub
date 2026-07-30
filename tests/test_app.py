@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models import ResolvedAudio, UnifiedTrack
 from app.providers.bilibili import BilibiliProvider
 
 
@@ -59,8 +60,8 @@ def test_bilibili_media_routes_separate_stream_and_direct(tmp_path, monkeypatch)
     monkeypatch.setattr(BilibiliProvider, "cache_video", cache_video)
 
     with TestClient(app) as client:
-        audio_stream = client.get("/api/bilibili/stream?id=BV1fixture%3A123")
-        audio_direct = client.get("/api/bilibili/direct?id=BV1fixture%3A123")
+        audio_stream = client.get("/api/bilibili/audio/stream?id=BV1fixture%3A123")
+        audio_direct = client.get("/api/bilibili/audio/direct?id=BV1fixture%3A123")
         video_stream = client.get("/api/bilibili/video/stream?id=BV1fixture%3A123")
         video_direct = client.get("/api/bilibili/video/direct?id=BV1fixture%3A123")
 
@@ -70,8 +71,12 @@ def test_bilibili_media_routes_separate_stream_and_direct(tmp_path, monkeypatch)
     assert audio_direct.status_code == 200
     assert audio_direct.content == b"cached mp3"
     assert audio_direct.headers["content-type"] == "audio/mpeg"
+    legacy_audio_stream = client.get("/api/bilibili/stream?id=BV1fixture%3A123")
+    legacy_audio_direct = client.get("/api/bilibili/direct?id=BV1fixture%3A123")
+    assert legacy_audio_stream.status_code == 200
+    assert legacy_audio_direct.status_code == 200
     audio_range = client.get(
-        "/api/bilibili/direct?id=BV1fixture%3A123",
+        "/api/bilibili/audio/direct?id=BV1fixture%3A123",
         headers={"Range": "bytes=1-6"},
     )
     assert video_stream.status_code == 200
@@ -98,3 +103,50 @@ def test_bilibili_media_routes_separate_stream_and_direct(tmp_path, monkeypatch)
     assert video_range.headers["content-range"] == "bytes 1-6/12"
     assert invalid_range.status_code == 416
     assert invalid_range.headers["content-range"] == "bytes */10"
+
+
+def test_bilibili_search_and_audio_resolve_return_canonical_audio_routes(monkeypatch) -> None:
+    track_id = "BV1fixture:123"
+
+    async def search(_provider, _query, *, limit, page):
+        assert limit == 10
+        assert page == 1
+        return [
+            UnifiedTrack(
+                source="bilibili",
+                id=track_id,
+                title="Fixture",
+                playable=True,
+            )
+        ]
+
+    async def resolve(_provider, requested_id):
+        assert requested_id == track_id
+        return ResolvedAudio(
+            source="bilibili",
+            id=requested_id,
+            audio_url="https://cdn.example.test/audio.m4s",
+        )
+
+    monkeypatch.setattr(BilibiliProvider, "search", search)
+    monkeypatch.setattr(BilibiliProvider, "resolve", resolve)
+
+    with TestClient(app) as client:
+        search_response = client.get("/api/bilibili/search?q=fixture")
+        resolve_response = client.get(
+            "/api/bilibili/audio/resolve?id=BV1fixture%3A123"
+        )
+        legacy_resolve_response = client.get(
+            "/api/bilibili/resolve?id=BV1fixture%3A123"
+        )
+
+    expected_stream = "/api/bilibili/audio/stream?id=BV1fixture%3A123"
+    expected_direct = "/api/bilibili/audio/direct?id=BV1fixture%3A123"
+    assert search_response.status_code == 200
+    assert search_response.json()[0]["stream_url"] == expected_stream
+    assert search_response.json()[0]["download_url"] == expected_direct
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["stream_url"] == expected_stream
+    assert resolve_response.json()["download_url"] == expected_direct
+    assert legacy_resolve_response.status_code == 200
+    assert legacy_resolve_response.json()["download_url"] == expected_direct
