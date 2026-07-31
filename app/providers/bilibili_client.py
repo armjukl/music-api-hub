@@ -17,6 +17,7 @@ import json
 import re
 import secrets
 import time
+from datetime import datetime, timezone
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias
@@ -221,6 +222,8 @@ class BilibiliVideo:
     title: str
     uploader: str
     pages: tuple[BilibiliPage, ...]
+    cover_url: str = ""
+    published_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,6 +366,16 @@ def _to_int(value: Any, default: int = 0) -> int:
 def _strip_html(value: Any) -> str:
     text = html.unescape(str(value or ""))
     return _WHITESPACE_RE.sub(" ", _HTML_TAG_RE.sub("", text)).strip()
+
+
+def _to_datetime(value: Any) -> datetime | None:
+    timestamp = _to_int(value)
+    if timestamp <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _normalise_url(value: Any) -> str:
@@ -523,6 +536,8 @@ class BilibiliClient:
             )
             or "未知上传者",
             pages=tuple(pages),
+            cover_url=_normalise_url(data.get("pic") or data.get("cover")),
+            published_at=_to_datetime(data.get("pubdate")),
         )
 
     async def resolve_audio(self, bvid: str, cid: int) -> ResolvedAudio:

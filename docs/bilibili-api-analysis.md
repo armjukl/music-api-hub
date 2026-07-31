@@ -124,7 +124,9 @@ source, id, title, artist, album, duration_ms,
 cover_url, source_url, playable, stream_url, download_url
 ```
 
-Bilibili 的 `artist` 当前实际填的是上传者，`cover_url` 目前没有从详情接口填充。上传者不一定是音乐作品的真实艺术家，这是数据语义上的限制。
+Bilibili 的 `artist` 当前实际填的是上传者。上传者不一定是音乐作品的真实艺术家，这是数据语义上的限制。
+
+`cover_url` 来自详情接口的 `pic` 字段；`published_at` 来自 `pubdate` 时间戳，以 UTC 输出为 ISO 8601。
 
 ### 视频详情
 
@@ -184,7 +186,7 @@ DASH 音频轨沿用音频的 192 kbps 选择策略。
 
 | 信息 | 常见来源 | 可用于 |
 | --- | --- | --- |
-| 封面、简介、发布时间、版权类型 | `/x/web-interface/wbi/view` | 丰富搜索结果和详情页 |
+| 简介、版权类型 | `/x/web-interface/wbi/view` | 丰富搜索结果和详情页 |
 | `aid`、分区 ID/名称、视频总页数 | `/x/web-interface/wbi/view` | 支持 AV/BV 双 ID、分类展示 |
 | 播放量、点赞、投币、收藏、分享、评论数、弹幕数 | 详情响应中的 `stat` | 热度排序和详情展示 |
 | 上传者 UID、头像、签名 | 详情响应中的 `owner`，或用户空间接口 | 作者信息和头像 |
@@ -207,12 +209,10 @@ DASH 音频轨沿用音频的 192 kbps 选择策略。
 
 ### 第一阶段：丰富现有结果
 
-优先在 `BilibiliVideo` 和 `UnifiedTrack` 增加以下稳定字段：
+`cover_url` 和 `published_at` 已填充。接下来可以在 `BilibiliVideo` 和 `UnifiedTrack` 继续增加以下稳定字段：
 
 - `aid`
-- `cover_url`
 - `description`
-- `published_at`
 - `owner_id`
 - `view_count`
 - `danmaku_count`

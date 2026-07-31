@@ -84,3 +84,26 @@ async def test_search_videos_accepts_page_number() -> None:
     await client.search_videos("夏霞", page=2)
 
     assert requests[0]["page"] == 2
+
+
+async def test_get_video_parses_cover_and_published_at() -> None:
+    client = DashFixtureClient()
+    detail = {
+        "bvid": "BV1fixture",
+        "title": "Fixture Video",
+        "pic": "//i0.hdslb.com/bfs/archive/fixture.jpg",
+        "pubdate": 1700000000,
+        "owner": {"name": "Up"},
+        "pages": [{"cid": 123, "page": 1, "part": "P1", "duration": 60}],
+    }
+
+    async def view_data(endpoint, params):
+        return detail
+
+    client._wbi_data = view_data
+
+    video = await client.get_video("BV1fixture")
+
+    assert video.cover_url == "https://i0.hdslb.com/bfs/archive/fixture.jpg"
+    assert video.published_at is not None
+    assert video.published_at.year == 2023

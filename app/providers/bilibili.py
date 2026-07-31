@@ -493,6 +493,8 @@ def _expand_video(video: Any) -> list[UnifiedTrack]:
     bvid = str(getattr(video, "bvid", "")).strip()
     title = str(getattr(video, "title", "")).strip() or bvid
     artist = str(getattr(video, "uploader", "")).strip()
+    cover_url = str(getattr(video, "cover_url", "")).strip() or None
+    published_at = getattr(video, "published_at", None)
     pages = tuple(getattr(video, "pages", ()))
     tracks: list[UnifiedTrack] = []
     for page in pages:
@@ -510,6 +512,8 @@ def _expand_video(video: Any) -> list[UnifiedTrack]:
                 title=display_title,
                 artist=artist,
                 duration_ms=int(getattr(page, "duration_ms", 0) or 0) or None,
+                cover_url=cover_url,
+                published_at=published_at,
                 source_url=f"https://www.bilibili.com/video/{bvid}/?p={page_index}",
                 playable=True,
             )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -11,6 +13,7 @@ class UnifiedTrack(BaseModel):
     album: str = ""
     duration_ms: int | None = None
     cover_url: str | None = None
+    published_at: datetime | None = None
     source_url: str | None = None
     playable: bool = False
     stream_url: str | None = None
