@@ -36,6 +36,7 @@ _NAV_URL = f"{BILIBILI_API_ORIGIN}/x/web-interface/nav"
 _SEARCH_URL = f"{BILIBILI_API_ORIGIN}/x/web-interface/wbi/search/type"
 _VIEW_URL = f"{BILIBILI_API_ORIGIN}/x/web-interface/wbi/view"
 _PLAY_URL = f"{BILIBILI_API_ORIGIN}/x/player/wbi/playurl"
+_FAVORITE_RESOURCE_LIST_URL = f"{BILIBILI_API_ORIGIN}/x/v3/fav/resource/list"
 _QR_GENERATE_URL = f"{BILIBILI_PASSPORT_ORIGIN}/x/passport-login/web/qrcode/generate"
 _QR_POLL_URL = f"{BILIBILI_PASSPORT_ORIGIN}/x/passport-login/web/qrcode/poll"
 
@@ -202,6 +203,19 @@ class BilibiliSearchVideo:
 
     bvid: str
     title: str
+
+
+@dataclass(frozen=True, slots=True)
+class BilibiliFavoriteVideo:
+    """One directly playable video entry from a Bilibili favorite folder."""
+
+    bvid: str
+    cid: int
+    title: str
+    uploader: str
+    duration_ms: int
+    cover_url: str = ""
+    published_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,6 +484,59 @@ class BilibiliClient:
                 BilibiliSearchVideo(
                     bvid=bvid,
                     title=title,
+                )
+            )
+            if len(videos) >= bounded_limit:
+                break
+        return tuple(videos)
+
+    async def list_favorite_videos(
+        self, media_id: int, *, limit: int = 20, page: int = 1
+    ) -> tuple[BilibiliFavoriteVideo, ...]:
+        """List playable video entries from one public favorite folder.
+
+        The favorite-list response includes ``ugc.first_cid`` for ordinary
+        video entries, allowing the caller to build a playable ``BV:cid`` ID
+        without a separate detail request for every item.
+        """
+        if isinstance(media_id, bool) or not isinstance(media_id, int) or media_id <= 0:
+            raise ValueError("media_id must be a positive integer")
+        bounded_limit = max(1, min(limit, 20))
+        bounded_page = max(1, min(page, 100))
+        payload, _ = await self._request_json(
+            _FAVORITE_RESOURCE_LIST_URL,
+            params={
+                "media_id": media_id,
+                "platform": "web",
+                "pn": bounded_page,
+                "ps": bounded_limit,
+            },
+        )
+        data = self._api_data(payload)
+        raw_items = data.get("medias")
+        if not isinstance(raw_items, list):
+            return ()
+
+        videos: list[BilibiliFavoriteVideo] = []
+        for raw in raw_items:
+            if not isinstance(raw, Mapping) or _to_int(raw.get("type")) != 2:
+                continue
+            bvid = str(raw.get("bvid") or raw.get("bv_id") or "").strip()
+            ugc = raw.get("ugc")
+            cid = _to_int(ugc.get("first_cid") if isinstance(ugc, Mapping) else None)
+            if not bvid or cid <= 0:
+                continue
+            upper = raw.get("upper")
+            uploader = _strip_html(upper.get("name") if isinstance(upper, Mapping) else "")
+            videos.append(
+                BilibiliFavoriteVideo(
+                    bvid=bvid,
+                    cid=cid,
+                    title=_strip_html(raw.get("title")) or bvid,
+                    uploader=uploader or "未知上传者",
+                    duration_ms=max(0, _to_int(raw.get("duration"))) * 1000,
+                    cover_url=_normalise_url(raw.get("cover")),
+                    published_at=_to_datetime(raw.get("pubtime") or raw.get("ctime")),
                 )
             )
             if len(videos) >= bounded_limit:

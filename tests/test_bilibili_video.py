@@ -107,3 +107,51 @@ async def test_get_video_parses_cover_and_published_at() -> None:
     assert video.cover_url == "https://i0.hdslb.com/bfs/archive/fixture.jpg"
     assert video.published_at is not None
     assert video.published_at.year == 2023
+
+
+async def test_list_favorite_videos_uses_first_cid_without_detail_request() -> None:
+    client = DashFixtureClient()
+    requests = []
+
+    async def favorite_data(endpoint, *, params=None, **_kwargs):
+        requests.append((endpoint, params))
+        return (
+            {
+                "code": 0,
+                "data": {
+                    "medias": [
+                        {
+                            "type": 2,
+                            "bvid": "BV1fixture",
+                            "title": "Favorite <em>Video</em>",
+                            "cover": "//i0.hdslb.com/bfs/archive/favorite.jpg",
+                            "duration": 65,
+                            "pubtime": 1700000000,
+                            "upper": {"name": "Uploader"},
+                            "ugc": {"first_cid": 456},
+                        },
+                        {
+                            "type": 12,
+                            "bvid": "BV1ignored",
+                            "ugc": {"first_cid": 789},
+                        },
+                    ]
+                },
+            },
+            {},
+        )
+
+    client._request_json = favorite_data
+    videos = await client.list_favorite_videos(3399027968, limit=10, page=2)
+
+    assert requests[0][1] == {
+        "media_id": 3399027968,
+        "platform": "web",
+        "pn": 2,
+        "ps": 10,
+    }
+    assert len(videos) == 1
+    assert videos[0].bvid == "BV1fixture"
+    assert videos[0].cid == 456
+    assert videos[0].duration_ms == 65000
+    assert videos[0].cover_url == "https://i0.hdslb.com/bfs/archive/favorite.jpg"

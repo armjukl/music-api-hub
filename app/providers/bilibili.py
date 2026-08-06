@@ -105,6 +105,20 @@ class BilibiliProvider:
         tracks = [track for group in groups for track in group]
         return tracks[: max(1, min(limit, 50))]
 
+    async def favorites(
+        self, media_id: int, *, limit: int = 10, page: int = 1
+    ) -> list[UnifiedTrack]:
+        client = self._require_client()
+        try:
+            videos = await client.list_favorite_videos(
+                media_id,
+                limit=min(max(limit, 1), 20),
+                page=max(1, min(page, 100)),
+            )
+        except Exception as exc:
+            raise BilibiliProviderError("Bilibili 收藏夹读取失败") from exc
+        return [_favorite_video_track(video) for video in videos]
+
     async def resolve(self, track_id: str) -> ResolvedAudio:
         client = self._require_client()
         bvid, cid = _parse_track_id(track_id)
@@ -519,6 +533,24 @@ def _expand_video(video: Any) -> list[UnifiedTrack]:
             )
         )
     return tracks
+
+
+def _favorite_video_track(video: Any) -> UnifiedTrack:
+    bvid = str(getattr(video, "bvid", "")).strip()
+    cid = int(getattr(video, "cid", 0) or 0)
+    if not bvid or cid <= 0:
+        raise BilibiliProviderError("Bilibili 收藏夹条目缺少可播放视频信息")
+    return UnifiedTrack(
+        source="bilibili",
+        id=f"{bvid}:{cid}",
+        title=str(getattr(video, "title", "")).strip() or bvid,
+        artist=str(getattr(video, "uploader", "")).strip(),
+        duration_ms=int(getattr(video, "duration_ms", 0) or 0) or None,
+        cover_url=str(getattr(video, "cover_url", "")).strip() or None,
+        published_at=getattr(video, "published_at", None),
+        source_url=f"https://www.bilibili.com/video/{bvid}/?p=1",
+        playable=True,
+    )
 
 
 def _parse_track_id(track_id: str) -> tuple[str, int]:

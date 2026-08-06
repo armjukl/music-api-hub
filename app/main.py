@@ -68,6 +68,7 @@ async def sources() -> list[SourceInfo]:
             label="Bilibili",
             capabilities=[
                 "search",
+                "favorites",
                 "audio.resolve",
                 "audio.stream",
                 "audio.direct",
@@ -122,6 +123,24 @@ async def bilibili_search(
     page: int = Query(1, ge=1, le=100),
 ) -> list[UnifiedTrack]:
     return await _search_bilibili(request, q, limit=limit, page=page)
+
+
+@app.get("/api/bilibili/favorites", response_model=list[UnifiedTrack])
+async def bilibili_favorites(
+    request: Request,
+    media_id: int = Query(..., gt=0),
+    limit: int = Query(10, ge=1, le=20),
+    page: int = Query(1, ge=1, le=100),
+) -> list[UnifiedTrack]:
+    try:
+        tracks = await request.app.state.bilibili.favorites(
+            media_id,
+            limit=limit,
+            page=page,
+        )
+        return [_with_bilibili_audio_track_urls(track) for track in tracks]
+    except BilibiliProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get(

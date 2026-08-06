@@ -6,6 +6,7 @@
 
 - `GET /api/sources`：列出可用来源和能力。
 - `GET /api/bilibili/search?q=歌曲名&page=2`：搜索 Bilibili 视频页并展开为可播放候选。
+- `GET /api/bilibili/favorites?media_id=收藏夹ID&page=1&limit=10`：读取公开收藏夹中的视频，并返回与搜索一致的可播放候选。
 - `GET /api/bilibili/audio/resolve?id=BV...:cid`：解析 Bilibili 音频，并返回实时播放地址和缓存直链。
 - `GET /api/bilibili/audio/stream?id=BV...:cid`：实时使用 FFmpeg 将 Bilibili 音频转换为 MP3，不写入缓存。
 - `GET /api/bilibili/audio/direct?id=BV...:cid`：先转换并按 ID 缓存 MP3，转换完成后返回本地文件。
@@ -24,6 +25,7 @@
 | 功能 | 规范入口 |
 | --- | --- |
 | 搜索 Bilibili 视频页 | `GET /api/bilibili/search?q=关键词&page=1` |
+| 读取公开 Bilibili 收藏夹 | `GET /api/bilibili/favorites?media_id=收藏夹ID&page=1&limit=10` |
 | 解析音频 | `GET /api/bilibili/audio/resolve?id=BV号:cid` |
 | 实时音频 MP3 | `GET /api/bilibili/audio/stream?id=BV号:cid` |
 | 缓存音频 MP3 | `GET /api/bilibili/audio/direct?id=BV号:cid` |
@@ -31,7 +33,7 @@
 | 实时视频 MP4 | `GET /api/bilibili/video/stream?id=BV号:cid` |
 | 缓存视频 MP4 | `GET /api/bilibili/video/direct?id=BV号:cid` |
 
-搜索结果与音频解析响应中的 `stream_url`、`download_url` 会返回规范的 `audio` 路径。服务不再提供 `/api/search`、`/api/resolve` 或旧的 `/api/bilibili/resolve`、`/api/bilibili/stream`、`/api/bilibili/direct`。
+搜索、收藏夹结果与音频解析响应中的 `stream_url`、`download_url` 会返回规范的 `audio` 路径。服务不再提供 `/api/search`、`/api/resolve` 或旧的 `/api/bilibili/resolve`、`/api/bilibili/stream`、`/api/bilibili/direct`。
 
 新增来源模块应提供自己的 `/api/{source}/search`，并按媒体类型提供 `/api/{source}/{media_type}/{action}` 入口。
 
@@ -68,9 +70,15 @@ export SPOTIFY_CLIENT_SECRET=your-client-secret
 
 冒号在 URL 中应编码为 `%3A`，例如 `BVxxxx%3A123`。
 
+## 收藏夹接口
+
+`GET /api/bilibili/favorites` 读取公开收藏夹的一个分页。参数 `media_id` 必填，`page` 默认 `1`，`limit` 默认 `10`、最大 `20`。
+
+上游条目的 `bvid` 和 `ugc.first_cid` 会组合为现有媒体接口可直接使用的 `BV号:cid`。当前只返回普通视频条目（`type=2`），跳过失效条目或缺少首个 `cid` 的条目；多 P 视频默认对应第一个分 P。私密收藏夹需要账号 Cookie，当前服务尚未开放。
+
 ## 统一响应
 
-搜索结果会规范为：
+搜索和收藏夹结果会规范为：
 
 ```json
 {

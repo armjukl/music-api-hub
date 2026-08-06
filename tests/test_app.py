@@ -149,3 +149,45 @@ def test_bilibili_search_and_audio_resolve_return_canonical_audio_routes(monkeyp
     assert resolve_response.json()["download_url"] == expected_direct
     assert legacy_resolve_response.status_code == 404
     assert legacy_search_response.status_code == 404
+
+
+def test_bilibili_favorites_return_canonical_audio_routes(monkeypatch) -> None:
+    track_id = "BV1fixture:456"
+
+    async def favorites(_provider, media_id, *, limit, page):
+        assert media_id == 3399027968
+        assert limit == 10
+        assert page == 2
+        return [
+            UnifiedTrack(
+                source="bilibili",
+                id=track_id,
+                title="Favorite fixture",
+                playable=True,
+            )
+        ]
+
+    monkeypatch.setattr(BilibiliProvider, "favorites", favorites)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/bilibili/favorites?media_id=3399027968&page=2"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "source": "bilibili",
+            "id": track_id,
+            "title": "Favorite fixture",
+            "artist": "",
+            "album": "",
+            "duration_ms": None,
+            "cover_url": None,
+            "published_at": None,
+            "source_url": None,
+            "playable": True,
+            "stream_url": "/api/bilibili/audio/stream?id=BV1fixture%3A456",
+            "download_url": "/api/bilibili/audio/direct?id=BV1fixture%3A456",
+        }
+    ]
