@@ -724,6 +724,36 @@ class BilibiliClient:
             audio_backup_urls=audio_track.backup_urls,
         )
 
+    async def resolve_video_progressive(self, bvid: str, cid: int) -> ResolvedVideo:
+        """Resolve the single-file MP4 returned by ``fnval=1``."""
+        normalized_bvid = _normalise_bvid(bvid)
+        if cid <= 0:
+            raise ValueError("cid must be positive")
+
+        data = await self._wbi_data(
+            _PLAY_URL,
+            {
+                "bvid": normalized_bvid,
+                "cid": cid,
+                "qn": 80,
+                "fnval": 1,
+                "fnver": 0,
+                "fourk": 0,
+                "platform": "pc",
+            },
+        )
+        progressive = self._single_progressive_track(data.get("durl"))
+        if progressive is None:
+            raise BilibiliError("Bilibili did not return a progressive MP4 stream")
+        url, backup_urls = progressive
+        return ResolvedVideo(
+            url=url,
+            headers=await self.stream_headers(normalized_bvid),
+            mime_type="video/mp4",
+            backup_urls=backup_urls,
+            duration_ms=_to_int(data.get("timelength")) or None,
+        )
+
     async def stream_headers(self, bvid: str) -> dict[str, str]:
         """Build headers required when a downstream downloader fetches a stream."""
         normalized_bvid = _normalise_bvid(bvid)

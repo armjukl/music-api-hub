@@ -11,6 +11,7 @@
 - `GET /api/bilibili/audio/stream?id=BV...:cid`：实时使用 FFmpeg 将 Bilibili 音频转换为 MP3，不写入缓存。
 - `GET /api/bilibili/audio/direct?id=BV...:cid`：先转换并按 ID 缓存 MP3，转换完成后返回本地文件。
 - `GET /api/bilibili/video/resolve?id=BV...:cid`：解析 Bilibili 完整视频，并返回实时播放地址和缓存直链。
+- `GET /api/bilibili/video/mp4?id=BV...:cid`：使用 `fnval=1` 请求并代理单文件 MP4；上游没有渐进式 MP4 时返回错误。
 - `GET /api/bilibili/video/stream?id=BV...:cid`：实时合并并返回完整视频，不写入缓存。
 - `GET /api/bilibili/video/direct?id=BV...:cid`：先合并并按 ID 缓存完整视频，合并完成后返回本地文件。
 - `GET /api/spotify/search?q=歌曲名`：使用内置 spotDL 模块搜索。
@@ -30,6 +31,7 @@
 | 实时音频 MP3 | `GET /api/bilibili/audio/stream?id=BV号:cid` |
 | 缓存音频 MP3 | `GET /api/bilibili/audio/direct?id=BV号:cid` |
 | 解析视频 | `GET /api/bilibili/video/resolve?id=BV号:cid` |
+| 渐进式 MP4（fnval=1） | `GET /api/bilibili/video/mp4?id=BV号:cid` |
 | 实时视频 MP4 | `GET /api/bilibili/video/stream?id=BV号:cid` |
 | 缓存视频 MP4 | `GET /api/bilibili/video/direct?id=BV号:cid` |
 
@@ -95,6 +97,8 @@ export SPOTIFY_CLIENT_SECRET=your-client-secret
 ```
 
 `source_url` 是 Bilibili 视频页面。实时播放使用 `stream_url`，需要等待转换完成并复用缓存时使用 `download_url`。`audio_url` 和 `video_url` 可能带短时效签名，不要长期保存或直接交给浏览器。
+
+视频解析响应另外包含 `mp4_url`，它是使用 `fnval=1` 获取的 Bilibili 上游渐进式 MP4 临时直链。该地址只在上游返回单文件 MP4 时可用，并可能因签名过期或 Referer 限制失效；需要稳定访问时应使用本服务的 `stream_url` 或 `download_url`。`/api/bilibili/video/mp4` 是同一模式的后端代理入口。
 
 完整视频同样使用返回结果中的 `stream_url`，例如：
 

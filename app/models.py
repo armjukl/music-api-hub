@@ -39,6 +39,7 @@ class ResolvedVideo(BaseModel):
     mime_type: str | None = None
     duration_ms: int | None = None
     source_url: str | None = None
+    mp4_url: str | None = None
     stream_url: str | None = None
     download_url: str | None = None
 

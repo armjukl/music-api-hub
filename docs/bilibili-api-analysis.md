@@ -41,6 +41,7 @@ Bilibili Web API
 | `GET /api/bilibili/audio/stream?id=BV...:cid` | 实时将音频转为 MP3 | 不写入完整文件 |
 | `GET /api/bilibili/audio/direct?id=BV...:cid` | 转换音频后返回本地 MP3 | 按 ID 缓存 |
 | `GET /api/bilibili/video/resolve?id=BV...:cid` | 解析完整视频信息 | 只解析，不生成文件 |
+| `GET /api/bilibili/video/mp4?id=BV...:cid` | 使用 `fnval=1` 代理单文件 MP4 | 不缓存，要求上游有 `durl` |
 | `GET /api/bilibili/video/stream?id=BV...:cid` | 实时合并或代理完整视频 | 不写入完整文件 |
 | `GET /api/bilibili/video/direct?id=BV...:cid` | 合并完整视频后返回本地 MP4 | 按 ID 缓存 |
 
@@ -54,6 +55,8 @@ Bilibili Web API
 ```
 
 视频解析响应的地址对应 `/api/bilibili/video/stream` 和 `/api/bilibili/video/direct`。
+
+视频解析响应还包含 `mp4_url`，它是使用 `fnval=1` 获取的 Bilibili 上游渐进式 MP4 临时直链；`/api/bilibili/video/mp4` 是同一模式的后端代理入口。当上游没有返回渐进式 MP4 时，`mp4_url` 为 `null`，应改用 `stream_url` 或 `download_url`。
 
 `stream` 适合尽快开始播放。它会在请求期间解析临时地址并启动 FFmpeg，客户端断开后进程会被关闭。`direct` 会等待下载、转换或合流完成，然后以分段文件响应返回；同一 `id` 再次请求时直接读取缓存文件，并支持单段 HTTP Range 请求，浏览器可以拖动进度。开发环境建议使用 Uvicorn 的有限优雅退出时间，避免实时流连接让进程无限等待：`--timeout-graceful-shutdown 5`。
 
@@ -88,6 +91,7 @@ page_size=<数量>
 视频详情使用 `bvid` 或 `aid`。播放地址使用 `qn=80`、`platform=pc`，并通过 `fnval` 选择格式：
 
 - `fnval=0`：优先请求单个渐进式文件，用于可以直接代理的完整 MP4。
+- `fnval=1`：请求渐进式 MP4；当前新增的 `/api/bilibili/video/mp4` 专用此模式。
 - `fnval=16`：请求 DASH，得到独立的视频轨和音频轨，需要 FFmpeg 合并。
 
 ## 4. WBI 签名流程
@@ -177,6 +181,8 @@ Provider 再生成页面地址 `https://www.bilibili.com/video/<bvid>/?p=<page>`
 ## 7. 视频播放地址链路
 
 客户端先用 `fnval=0` 请求渐进式地址。如果返回的 `durl` 只有一个完整文件，直接使用它；否则再次用 `fnval=16` 请求 DASH。
+
+`/api/bilibili/video/mp4` 单独使用 `fnval=1`，只接受一个完整的 `durl`。如果上游仅返回 DASH 或多个分段，该接口返回错误；需要兼容这类视频时使用 `/api/bilibili/video/stream` 或 `/api/bilibili/video/direct`，由 FFmpeg 合并音视频。
 
 DASH 视频轨选择规则：
 

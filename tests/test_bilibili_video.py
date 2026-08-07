@@ -155,3 +155,27 @@ async def test_list_favorite_videos_uses_first_cid_without_detail_request() -> N
     assert videos[0].cid == 456
     assert videos[0].duration_ms == 65000
     assert videos[0].cover_url == "https://i0.hdslb.com/bfs/archive/favorite.jpg"
+
+
+async def test_resolve_video_progressive_requests_fnval_one() -> None:
+    client = DashFixtureClient()
+    requests = []
+
+    async def play_data(endpoint, params):
+        requests.append((endpoint, params))
+        return {
+            "timelength": 9000,
+            "durl": [
+                {
+                    "url": "https://cdn.example.test/progressive.mp4",
+                    "backup_url": ["https://backup.example.test/progressive.mp4"],
+                }
+            ],
+        }
+
+    client._wbi_data = play_data
+    video = await client.resolve_video_progressive("BV1fixture", 456)
+
+    assert requests[0][1]["fnval"] == 1
+    assert video.url == "https://cdn.example.test/progressive.mp4"
+    assert video.audio_url is None

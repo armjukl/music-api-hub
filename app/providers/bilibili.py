@@ -296,6 +296,22 @@ class BilibiliProvider:
             source_url=f"https://www.bilibili.com/video/{bvid}",
         )
 
+    async def resolve_video_progressive(self, track_id: str) -> ResolvedVideo:
+        client = self._require_client()
+        bvid, cid = _parse_track_id(track_id)
+        try:
+            video = await client.resolve_video_progressive(bvid, cid)
+        except Exception as exc:
+            raise BilibiliProviderError("Bilibili 未返回渐进式 MP4 视频流") from exc
+        return ResolvedVideo(
+            source=self.source,
+            id=track_id,
+            video_url=video.url,
+            mime_type=video.mime_type,
+            duration_ms=video.duration_ms,
+            source_url=f"https://www.bilibili.com/video/{bvid}",
+        )
+
     async def open_video_stream(self, track_id: str, range_header: str | None = None) -> tuple[Any, Any]:
         client = self._require_client()
         bvid, cid = _parse_track_id(track_id)
@@ -315,6 +331,25 @@ class BilibiliProvider:
             raise
         except Exception as exc:
             raise BilibiliProviderError("Bilibili 视频代理请求失败") from exc
+
+    async def open_progressive_video_stream(
+        self, track_id: str, range_header: str | None = None
+    ) -> tuple[Any, Any]:
+        client = self._require_client()
+        bvid, cid = _parse_track_id(track_id)
+        try:
+            video = await client.resolve_video_progressive(bvid, cid)
+            response = await self._open_remote_stream(
+                (video.url, *video.backup_urls),
+                dict(video.headers),
+                range_header=range_header,
+                label="渐进式视频",
+            )
+            return response, video
+        except BilibiliProviderError:
+            raise
+        except Exception as exc:
+            raise BilibiliProviderError("Bilibili 渐进式视频代理请求失败") from exc
 
     def _require_client(self) -> Any:
         if self._client is None:

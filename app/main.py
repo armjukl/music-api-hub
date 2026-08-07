@@ -73,6 +73,7 @@ async def sources() -> list[SourceInfo]:
                 "audio.stream",
                 "audio.direct",
                 "video.resolve",
+                "video.mp4",
                 "video.stream",
                 "video.direct",
             ],
@@ -196,7 +197,13 @@ async def bilibili_video_resolve(
 ) -> ResolvedVideo:
     try:
         video = await request.app.state.bilibili.resolve_video(id)
-        return _with_bilibili_video_stream_url(video, id)
+        mp4_url: str | None = None
+        try:
+            progressive = await request.app.state.bilibili.resolve_video_progressive(id)
+            mp4_url = progressive.video_url
+        except BilibiliProviderError:
+            pass
+        return _with_bilibili_video_stream_url(video, id, mp4_url=mp4_url)
     except BilibiliProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -224,6 +231,40 @@ async def bilibili_video_stream(
             media_type=video.mime_type or "video/mp4",
             headers={"Cache-Control": "no-store"},
         )
+
+    response_headers = {"Accept-Ranges": "bytes"}
+    for header_name in ("Content-Length", "Content-Range"):
+        value = upstream.headers.get(header_name)
+        if value:
+            response_headers[header_name] = value
+
+    async def iterator():
+        try:
+            async for chunk in upstream.content.iter_chunked(64 * 1024):
+                yield chunk
+        finally:
+            upstream.release()
+
+    return StreamingResponse(
+        iterator(),
+        status_code=upstream.status,
+        media_type=upstream.headers.get("Content-Type") or video.mime_type or "video/mp4",
+        headers=response_headers,
+    )
+
+
+@app.get("/api/bilibili/video/mp4", name="bilibili_video_mp4")
+async def bilibili_video_mp4(
+    request: Request,
+    id: str = Query(..., min_length=1, max_length=160),
+) -> StreamingResponse:
+    try:
+        upstream, video = await request.app.state.bilibili.open_progressive_video_stream(
+            id,
+            range_header=request.headers.get("range"),
+        )
+    except BilibiliProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     response_headers = {"Accept-Ranges": "bytes"}
     for header_name in ("Content-Length", "Content-Range"):
@@ -386,10 +427,13 @@ def _with_bilibili_audio_urls(audio: ResolvedAudio, track_id: str) -> ResolvedAu
     )
 
 
-def _with_bilibili_video_stream_url(video: ResolvedVideo, track_id: str) -> ResolvedVideo:
+def _with_bilibili_video_stream_url(
+    video: ResolvedVideo, track_id: str, *, mp4_url: str | None = None
+) -> ResolvedVideo:
     encoded_id = quote(track_id, safe="")
     return video.model_copy(
         update={
+            "mp4_url": mp4_url,
             "stream_url": f"/api/bilibili/video/stream?id={encoded_id}",
             "download_url": f"/api/bilibili/video/direct?id={encoded_id}",
         }

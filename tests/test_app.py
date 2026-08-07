@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models import ResolvedAudio, UnifiedTrack
+from app.models import ResolvedAudio, ResolvedVideo, UnifiedTrack
 from app.providers.bilibili import BilibiliProvider
 
 
@@ -191,3 +191,70 @@ def test_bilibili_favorites_return_canonical_audio_routes(monkeypatch) -> None:
             "download_url": "/api/bilibili/audio/direct?id=BV1fixture%3A456",
         }
     ]
+
+
+def test_bilibili_mp4_route_uses_progressive_stream(monkeypatch) -> None:
+    class ProgressiveContent:
+        async def iter_chunked(self, _chunk_size):
+            yield b"progressive mp4"
+
+    class ProgressiveResponse:
+        status = 200
+        headers = {"Content-Type": "video/mp4", "Content-Length": "15"}
+        content = ProgressiveContent()
+
+        def release(self) -> None:
+            return None
+
+    async def open_progressive(_provider, track_id, *, range_header):
+        assert track_id == "BV1fixture:456"
+        assert range_header == "bytes=0-14"
+        return ProgressiveResponse(), SimpleNamespace(mime_type="video/mp4")
+
+    monkeypatch.setattr(
+        BilibiliProvider,
+        "open_progressive_video_stream",
+        open_progressive,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/bilibili/video/mp4?id=BV1fixture%3A456",
+            headers={"Range": "bytes=0-14"},
+        )
+
+    assert response.status_code == 200
+    assert response.content == b"progressive mp4"
+    assert response.headers["content-type"] == "video/mp4"
+
+
+def test_bilibili_video_resolve_includes_mp4_route(monkeypatch) -> None:
+    async def resolve_video(_provider, track_id):
+        assert track_id == "BV1fixture:456"
+        return ResolvedVideo(
+            source="bilibili",
+            id=track_id,
+            video_url="https://cdn.example.test/video.mp4",
+            mime_type="video/mp4",
+        )
+
+    monkeypatch.setattr(BilibiliProvider, "resolve_video", resolve_video)
+
+    async def resolve_progressive(_provider, track_id):
+        assert track_id == "BV1fixture:456"
+        return ResolvedVideo(
+            source="bilibili",
+            id=track_id,
+            video_url="https://cdn.example.test/progressive.mp4",
+            mime_type="video/mp4",
+        )
+
+    monkeypatch.setattr(BilibiliProvider, "resolve_video_progressive", resolve_progressive)
+
+    with TestClient(app) as client:
+        response = client.get("/api/bilibili/video/resolve?id=BV1fixture%3A456")
+
+    assert response.status_code == 200
+    assert response.json()["mp4_url"] == "https://cdn.example.test/progressive.mp4"
+    assert response.json()["stream_url"] == "/api/bilibili/video/stream?id=BV1fixture%3A456"
+    assert response.json()["download_url"] == "/api/bilibili/video/direct?id=BV1fixture%3A456"
